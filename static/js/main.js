@@ -48,13 +48,16 @@ var labels = function () {
     this.polarization = -1;
     this.charge = -1;
     this.dtheta = 10;
-    this.dr = 0.2;
-    this.dr_mult = 0.82;
+    this.dr = 0.1;
+    this.dr_mult = 0.95;
+    this.R_mult = 1.2;
     this.color_scheme = "initial";
+    this.coordinate_system = "polar";
+
     this.reset = function () {
       createSkyrmion();
     };
-  
+    
     this.gradient_interp  = [255, 255, 255];
     this.background_color = [255, 255, 255];
   
@@ -81,7 +84,12 @@ gui.add(guiValues, "color_scheme", ['initial', 'gradient']).onChange(function(va
     createSkyrmion();
 });
 
-gui.add(guiValues, "dr", 0, 1, 0.001).onChange(function(value)
+gui.add(guiValues, "coordinate_system", ['polar', 'square']).onChange(function(value)
+{
+    createSkyrmion();
+});
+
+gui.add(guiValues, "dr", 0.01, 1, 0.01).onChange(function(value)
 {
     createSkyrmion();
 })
@@ -90,6 +98,12 @@ gui.add(guiValues, "dr_mult", 0, 1, 0.001).onChange(function(value)
 {
     createSkyrmion();
 })
+
+gui.add(guiValues, "R_mult", .1, 3, 0.1).onChange(function(value)
+{
+    createSkyrmion();
+})
+
 
 let dtheta_possible = [];
 for (let i = 1; i <= 180; i += 1)
@@ -105,7 +119,6 @@ gui.add(guiValues, "dtheta", dtheta_possible).onChange(function(value)
 
 gui.addColor(guiValues, "gradient_interp").onChange(function (color) 
 {
-    console.log("ZASDADS");
     this.background_color = color;
     createSkyrmion();
 });
@@ -159,6 +172,134 @@ function clearScene()
     }
 }
 
+function polarCoordLattice()
+{
+  let pol = guiValues.polarization;
+  let charge = guiValues.charge;
+  let r = 0;
+  let R = parseFloat(guiValues.R_mult);
+  let theta = 0;
+  let dr = parseFloat(guiValues.dr);
+  let dr_mult = parseFloat(guiValues.dr_mult);
+  let dtheta = parseInt(guiValues.dtheta);
+  let eps = 1e-9;
+
+  while (r <= R) {
+    //console.log(r);
+    let w = 8 * dr;
+    let w2 = w * w;
+  
+    theta = 0;
+    while (theta < 360) {
+      let x = r * Math.cos((theta * Math.PI) / 180) * r;
+      let y = r * Math.sin((theta * Math.PI) / 180) * r;
+      let r2 = x * x + y * y;
+  
+      // pol =1 , charge = 1
+      let mz = 2 * pol * (Math.exp(-r2 / w2) - 0.5);
+      let mx = (x * charge / (r + eps)) * (1 - Math.abs(mz));
+      let my = (y  * charge / (r + eps)) * (1 - Math.abs(mz));
+
+      let v = new THREE.Vector3(mx, my, mz);
+  
+      if (guiValues.color_scheme === "initial")
+      {
+        color = colorInitial(mx,my,mz);
+      }
+      else if (guiValues.color_scheme === "gradient")
+      {
+        color = colorGradient(mx,my,mz);
+      }
+      //console.log(color);
+      let arr = createArrow(v, new THREE.Vector3(x * 5, y * 5, 0), color, 0.05);
+      arrows.push(arr);
+  
+      theta += dtheta;
+    }
+    r += dr;
+    dr = Math.max(dr_mult * dr, 0.05);
+  }
+}
+
+function squareCoordLattice()
+{
+  let pol = guiValues.polarization;
+  let charge = guiValues.charge;
+  let R = parseFloat(guiValues.R_mult);
+  let dr = parseFloat(guiValues.dr);
+  let dr_mult = parseFloat(guiValues.dr_mult);
+  let dtheta = parseInt(guiValues.dtheta);
+  let eps = 1e-9;
+
+  let x = -R;
+
+  while (x <= R) {
+    let y = -R;
+    let w = 8 * dr;
+    let w2 = w * w;
+
+    while (y <= R) {
+      let r2 = x * x + y * y;
+      let r = Math.sqrt(r2);
+  
+      // pol =1 , charge = 1
+      let mz = 2 * pol * (Math.exp(-r2 / w2) - 0.5);
+      let mx = (x * charge / (r + eps)) * (1 - Math.abs(mz));
+      let my = (y  * charge / (r + eps)) * (1 - Math.abs(mz));
+  
+      let v = new THREE.Vector3(mx, my, mz);
+  
+      if (guiValues.color_scheme === "initial")
+      {
+        color = colorInitial(mx,my,mz);
+      }
+      else if (guiValues.color_scheme === "gradient")
+      {
+        color = colorGradient(mx,my,mz);
+      }
+  
+      let arr = createArrow(v, new THREE.Vector3(x * 5, y * 5, 0), color, 0.05);
+      arrows.push(arr);
+  
+      y += dr;
+    }
+    x += dr;
+  }  
+}
+
+function colorInitial(mx,my,mz)
+{
+  let m_mag = Math.sqrt(mx * mx + my * my + mz * mz);
+  mx = mx / m_mag;
+  my = my / m_mag;
+  mz = mz / m_mag;
+
+  if (mz > 0) color = Math.round(Math.abs(mz) * 255) << 16;
+  else color = Math.round(Math.abs(mz) * 255);
+  color = color + (Math.round(Math.sqrt(mx * mx + my * my) * 255) << 8);
+  return color;
+}
+
+function colorGradient(mx,my,mz)
+{
+  let m_mag = Math.sqrt(mx * mx + my * my + mz * mz);
+  mx = mx / m_mag;
+  my = my / m_mag;
+  mz = mz / m_mag;
+
+  let mag = 1- Math.abs(mz);
+  let desired;
+  if (mz > 0) desired = [255, 0, 0];
+  else desired = [0, 0, 255];
+
+  let final_r = Math.round(lerp(desired[0], guiValues.gradient_interp[0], mag));
+  let final_g = Math.round(lerp(desired[1], guiValues.gradient_interp[1], mag));
+  let final_b = Math.round(lerp(desired[2], guiValues.gradient_interp[2], mag));
+  
+  color = (final_r << 16) + (final_g << 8) + final_b;
+  return color;
+}
+
 window.addEventListener("resize", resize);
 
 resize();
@@ -176,64 +317,10 @@ function animate() {
 function createSkyrmion()
 {
     clearScene();
-    
-
-    let pol = guiValues.polarization;
-    let charge = guiValues.charge;
-    let r = 0;
-    let R = 1;
-    let theta = 0;
-    let dr = parseFloat(guiValues.dr);
-    let dr_mult = parseFloat(guiValues.dr_mult);
-    let dtheta = parseInt(guiValues.dtheta);
-    let eps = 1e-9;
-    while (r <= R) {
-      console.log(r);
-      let w = 8 * dr;
-      let w2 = w * w;
-    
-      theta = 0;
-      while (theta < 360) {
-        let x = r * Math.cos((theta * Math.PI) / 180) * r;
-        let y = r * Math.sin((theta * Math.PI) / 180) * r;
-        let r2 = x * x + y * y;
-    
-        // pol =1 , charge = 1
-        let mz = 2 * pol * (Math.exp(-r2 / w2) - 0.5);
-        let mx = (x * charge / (r + eps)) * (1 - Math.abs(mz));
-        let my = (y  * charge / (r + eps)) * (1 - Math.abs(mz));
-    
-        let v = new THREE.Vector3(mx, my, mz);
-    
-        if (guiValues.color_scheme === "initial")
-        {
-            if (mz > 0) color = Math.round(Math.abs(mz) * 255) << 16;
-            else color = Math.round(Math.abs(mz) * 255);
-            color = color + (Math.round(Math.sqrt(mx * mx + my * my) * 255) << 8);
-        }
-        else if (guiValues.color_scheme === "gradient")
-        {
-            let mag = 1- Math.abs(mz);
-            let desired;
-            if (mz > 0) desired = [255, 0, 0];
-            else desired = [0, 0, 255];
-
-            let final_r = Math.round(lerp(desired[0], guiValues.gradient_interp[0], mag));
-            let final_g = Math.round(lerp(desired[1], guiValues.gradient_interp[1], mag));
-            let final_b = Math.round(lerp(desired[2], guiValues.gradient_interp[2], mag));
-            
-            color = (final_r << 16) + (final_g << 8) + final_b;
-        }
-    
-        let arr = createArrow(v, new THREE.Vector3(x * 5, y * 5, 0), color, 0.05);
-        arrows.push(arr);
-    
-        theta += dtheta;
-      }
-      r += dr;
-      dr = dr_mult * dr;
-    }
-
+    if (guiValues.coordinate_system === "polar")
+      polarCoordLattice();    
+    else if (guiValues.coordinate_system === "square")
+      squareCoordLattice();     
 }
 
 createSkyrmion();
