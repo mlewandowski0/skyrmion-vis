@@ -326,7 +326,7 @@ function polarCoordLatticeSkyrmionium() {
       let y = r * Math.sin((theta * Math.PI) / 180);
 
       let theta_r = (theta * Math.PI) / 180;
-      let mz = pol * Math.cos(2 * Theta(r, R));
+      let mz = pol * Math.cos(mult * Theta(r, R));
       let mx = 0;
       let my = 0;
       if (charge == -1) {
@@ -390,7 +390,7 @@ function squareCoordLatticeSkyrmionium() {
       let my = 0;
       let mz = 0;
 
-      mz = pol * Math.cos(2 * Theta(Math.min(r, R), R));
+      mz = pol * Math.cos(mult * Theta(Math.min(r, R), R));
       if (charge == -1) {
         mx =
           Math.sin(mult * Theta(Math.min(r, R), R)) *
